@@ -12,11 +12,14 @@ class ArticleModel extends Model
 {
 	protected $pk   = 'id';
 	protected $name = 'articles';
-	
 	// 一对一关联
 	public function category()
     {
         return $this->hasOne('CategoryModel', 'id', 'category_id');
+    }
+    public function user()
+    {
+        return $this->hasOne('UserModel', 'id', 'user_id');
     }
 	// 多对多关联
     public function tags()
@@ -28,6 +31,7 @@ class ArticleModel extends Model
 		$userId = session('user')['id'];
 		return UserModel::get($userId);
 	}
+
 	public function addArticle($postData)
 	{
 		$currentUser = $this->getCurrentUser();
@@ -51,6 +55,8 @@ class ArticleModel extends Model
 				// $articleTag->saveAll($tags);
 				$article->tags()->saveAll($postData['tag']);
 			}
+			// 更新分类下文章数量
+			$this->updateCategoryArticleNum();
 			// 提交事务
 			Db::commit();
 			return $article;
@@ -60,12 +66,16 @@ class ArticleModel extends Model
 			return false;
 		}
 	}
+
 	public function editArticle($id, $postData)
 	{
 		$currentUser = $this->getCurrentUser();
 		Db::startTrans();
 		try {
 			$article = self::get($id);
+			if (!$article) {
+				return false;
+			}
 			$article->title = $postData['title'];
 			$article->sub_title = $postData['subtitle'];
 			$article->body = $postData['content'];
@@ -83,6 +93,8 @@ class ArticleModel extends Model
 				// $articleTag->saveAll($tags);
 				$article->tags()->saveAll($postData['tag']);
 			}
+			// 更新分类下文章数量
+			$this->updateCategoryArticleNum();
 			// 提交事务
 			Db::commit();
 			return $article;
@@ -90,6 +102,19 @@ class ArticleModel extends Model
 		    // 回滚事务
 		    Db::rollback();
 			return false;
+		}
+	}
+	
+	public function updateCategoryArticleNum()
+	{
+		$currentUser = $this->getCurrentUser();
+		$categories = CategoryModel::where('user_id', $currentUser->id)->select();
+		if (!$categories) {
+			return true;
+		}
+		foreach ($categories as $key => $category) {
+			$category->article_num = self::where('category_id', $category->id)->count();
+			$category->save();
 		}
 	}
 }
